@@ -35,6 +35,9 @@ Clone the repository to your local machine:
 ```bash
 git clone https://github.com/yourusername/library-management-system.git
 
+
+# usage
+ 
 ## Usage
 After running the application, you will be presented with a menu to interact with the library system:
 --------------------------------------
@@ -51,10 +54,10 @@ Library Management System
 Select an option:
 
 
-## Code-structure
+## Code structure
 The codebase is structured into several packages to separate concerns and organize the functionality:
 
-models: Contains data structures for books and members.
+models: Contains data structures for books and members
 services: Implements the library operations.
 controllers: Handles user input and orchestrates actions.
 main.go: Entry point for the application, with the command-line interface logic.
