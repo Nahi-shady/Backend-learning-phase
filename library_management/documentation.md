@@ -59,7 +59,7 @@ Select an option:
 
 The codebase is structured into several packages to separate concerns and organize the functionality:
 
-models: Contains data structures for books and members
-services: Implements the library operations.
-controllers: Handles user input and orchestrates actions.
-main.go: Entry point for the application, with the command-line interface logic.
+1. models: Contains data structures for books and members
+2. services: Implements the library operations.
+3. controllers: Handles user input and orchestrates actions.
+4. main.go: Entry point for the application, with the command-line interface logic.
