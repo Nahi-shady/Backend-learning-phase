@@ -46,10 +46,9 @@ func main() {
 		fmt.Println("6. List Borrowed Books")
 		fmt.Println("7. Add A New Member")
 		fmt.Println("8. Exit")
+		time.Sleep(time.Duration(2) * time.Second)
 
 		choice := readIntInput("Select an option: ")
-
-		time.Sleep(time.Duration(2) * time.Second)
 
 		switch choice {
 		case 1:
@@ -72,6 +71,6 @@ func main() {
 		default:
 			fmt.Println("Invalid option. Please try again.")
 		}
-		time.Sleep(time.Duration(2) * time.Second)
+		time.Sleep(time.Duration(3) * time.Second)
 	}
 }

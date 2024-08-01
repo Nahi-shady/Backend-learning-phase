@@ -11,8 +11,8 @@ type LibraryManager interface {
 	RemoveBook(bookID int) error
 	BorrowBook(bookID int, memberID int) error
 	ReturnBook(bookID int, memberID int) error
-	ListAvailableBooks() []models.Book
-	ListBorrowedBooks(memberID int) []models.Book
+	ListAvailableBooks()
+	ListBorrowedBooks(memberID int)
 	AddMember(member models.Member) error
 }
 
@@ -25,6 +25,22 @@ func NewLibrary() *Library {
 	return &Library{
 		books:   make(map[int]models.Book),
 		members: make(map[int]models.Member),
+	}
+}
+
+func display_books(books map[int]models.Book) {
+	fmt.Println("ID ", "|Title ", "|Author ", "|Status")
+	fmt.Println("----------------------------------------------------------------------------")
+	for _, book := range books {
+		fmt.Printf("%d: %v |%v |%v\n", book.ID, book.Title, book.Author, book.Status)
+		fmt.Println("-------------------------------------------------------------------")
+	}
+}
+
+func display_members(members map[int]models.Member) {
+	fmt.Println("ID  ", "Name  ")
+	for _, member := range members {
+		fmt.Printf("%d: %s\n", member.ID, member.Name)
 	}
 }
 
@@ -94,27 +110,17 @@ func (l *Library) ReturnBook(bookID int, memberID int) error {
 	return nil
 }
 
-func (l *Library) ListAvailableBooks() []models.Book {
-	availableBooks := []models.Book{}
-	for _, book := range l.books {
-		if book.Status == "Available" {
-			availableBooks = append(availableBooks, book)
-		}
-	}
-	return availableBooks
+func (l *Library) ListAvailableBooks() {
+	display_books(l.books)
 }
 
-func (l *Library) ListBorrowedBooks(memberID int) []models.Book {
-	borrowedBooks := []models.Book{}
+func (l *Library) ListBorrowedBooks(memberID int) {
 	member, exists := l.members[memberID]
 	if !exists {
-		return borrowedBooks
+		fmt.Println("Member with that ID doesn't exist!")
 	}
 
-	for _, book := range member.Borrowed {
-		borrowedBooks = append(borrowedBooks, book)
-	}
-	return borrowedBooks
+	display_books(member.Borrowed)
 }
 
 func (l *Library) AddMember(member models.Member) error {
@@ -122,9 +128,8 @@ func (l *Library) AddMember(member models.Member) error {
 		return fmt.Errorf("member with ID %d already exists", member.ID)
 	}
 	l.members[member.ID] = member
-
+	display_members(l.members)
 	time.Sleep(time.Duration(2) * time.Second)
 
-	fmt.Println("Members List: ", l.members)
 	return nil
 }

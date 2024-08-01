@@ -107,33 +107,13 @@ func (lc *LibraryController) ReturnBook() {
 }
 
 func (lc *LibraryController) ListAvailableBooks() {
-	books := lc.service.ListAvailableBooks()
-
-	if len(books) == 0 {
-		fmt.Println("No books are available.")
-		return
-	}
-
-	fmt.Println("Available Books:")
-	for _, book := range books {
-		fmt.Printf("ID: %d, Title: %s, Author: %s, Status: %s\n", book.ID, book.Title, book.Author, book.Status)
-	}
+	lc.service.ListAvailableBooks()
 }
 
 func (lc *LibraryController) ListBorrowedBooks() {
 	memberID := readIntInput("Enter the Member ID to view borrowed books: ")
 
-	books := lc.service.ListBorrowedBooks(memberID)
-
-	if len(books) == 0 {
-		fmt.Println("No books are borrowed by this member.")
-		return
-	}
-
-	fmt.Println("Borrowed Books:")
-	for _, book := range books {
-		fmt.Printf("ID: %d, Title: %s, Author: %s, Status: %s\n", book.ID, book.Title, book.Author, book.Status)
-	}
+	lc.service.ListBorrowedBooks(memberID)
 }
 
 func (lc *LibraryController) AddMember() {
