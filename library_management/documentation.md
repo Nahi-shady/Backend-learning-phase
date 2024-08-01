@@ -35,11 +35,16 @@ Clone the repository to your local machine:
 ```bash
 git clone https://github.com/yourusername/library-management-system.git
 ```
+
 ## Usage
+
 After running the application, you will be presented with a menu to interact with the library system:
+
 --------------------------------------
 Library Management System
+
 --------------------------------------
+
 1. Add New Book
 2. Remove Book
 3. Borrow Book
@@ -50,8 +55,8 @@ Library Management System
 8. Exit
 Select an option:
 
-
 ## Code structure
+
 The codebase is structured into several packages to separate concerns and organize the functionality:
 
 models: Contains data structures for books and members
