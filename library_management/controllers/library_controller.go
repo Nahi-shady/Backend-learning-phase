@@ -70,8 +70,14 @@ func (lc *LibraryController) AddNewBook() {
 	fmt.Println("Book added successfully.")
 }
 func (lc *LibraryController) RemoveBook() {
-	id := readIntInput("Please enter the id of the book")
-	lc.service.RemoveBook(id)
+	id := readIntInput("Please enter the id of the book: ")
+	err := lc.service.RemoveBook(id)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Println("Book is deleted successfully!")
 }
 
 func (lc *LibraryController) BorrowBook() {
@@ -153,7 +159,7 @@ func BookIDGenerator() int {
 	return id
 }
 func MemberIDGenerator() int {
-	id := bookIDCounter
+	id := memberIDCounter
 	memberIDCounter++
 	return id
 }

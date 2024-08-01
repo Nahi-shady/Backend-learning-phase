@@ -50,19 +50,25 @@ func (l *Library) BorrowBook(bookID int, memberID int) error {
 		return fmt.Errorf("book with ID %d not available", bookID)
 	}
 
+	if book.Status != "Available" {
+		return fmt.Errorf("book with ID %d is not available for borrowing", bookID)
+	}
+
 	member, memberExists := l.members[memberID]
 	if !memberExists {
 		return fmt.Errorf("member with ID %d not found", memberID)
 	}
 
-	if book.Status != "Available" {
-		return fmt.Errorf("book with ID %d is not available for borrowing", bookID)
+	if member.Borrowed == nil {
+		member.Borrowed = make(map[int]models.Book)
 	}
 
 	book.Status = "Borrowed"
 	l.books[bookID] = book
 	member.Borrowed[bookID] = book
 	l.members[memberID] = member
+
+	fmt.Printf("Member %s successfully borrowed book %s", member.Name, book.Title)
 	return nil
 }
 
