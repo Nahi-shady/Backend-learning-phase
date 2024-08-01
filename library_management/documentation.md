@@ -63,4 +63,3 @@ models: Contains data structures for books and members
 services: Implements the library operations.
 controllers: Handles user input and orchestrates actions.
 main.go: Entry point for the application, with the command-line interface logic.
-Here's an overview of the main components:
