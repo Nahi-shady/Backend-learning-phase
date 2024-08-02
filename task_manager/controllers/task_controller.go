@@ -1,5 +1,3 @@
-// controllers/task_controller.go
-
 package controllers
 
 import (
