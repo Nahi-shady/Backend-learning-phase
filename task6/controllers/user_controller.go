@@ -9,11 +9,39 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Register(c *gin.Context) {
+func LoginUser(c *gin.Context) {
+	var credentials struct {
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&credentials); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	user, err := data.Authenticate(credentials.Username, credentials.Password)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+		return
+	}
+
+	token, err := middlewares.GenerateJWT(user.Username, user.ID.Hex())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return
+	}
+
+	middlewares.SetTokenCookie(c, token)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Login successful"})
+}
+
+func RegisterUser(c *gin.Context) {
 	var user models.User
 
 	if err := c.ShouldBindJSON(&user); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body, Make sure to provide username and password"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -24,29 +52,4 @@ func Register(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
-}
-
-func LoginUser(c *gin.Context) {
-	var credentials struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
-
-	if err := c.ShouldBind(credentials); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
-	}
-
-	user, err := data.Authenticate(credentials.Username, credentials.Password)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
-		return
-	}
-
-	token, err := middlewares.GenerateJWT(user)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"token": token})
 }

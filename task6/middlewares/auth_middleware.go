@@ -2,64 +2,77 @@ package middlewares
 
 import (
 	"net/http"
-	"strings"
-	"task_manager/models"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 )
 
-var jwtKey = []byte("your_secret_key")
+var jwtKey = []byte("secret_key")
 
 type Claims struct {
-	UserID string `json:"user_id"`
+	Username string `json:"username"`
+	UserID   string `json:"userID"`
 	jwt.StandardClaims
 }
 
-func GenerateJWT(user models.User) (string, error) {
-	claims := jwt.MapClaims{
-		"userID":   user.ID,
-		"username": user.Username,
-		"role":     user.Role,
-		"exp":      time.Now().Add(time.Hour * 72).Unix(),
+func GenerateJWT(username, userID string) (string, error) {
+	expirationTime := time.Now().Add(24 * time.Hour)
+
+	claims := &Claims{
+		Username: username,
+		UserID:   userID,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: expirationTime.Unix(),
+			IssuedAt:  time.Now().Unix(),
+		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtKey)
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		return "", err
+	}
+	return tokenString, nil
+}
+
+func SetTokenCookie(c *gin.Context, token string) {
+	c.SetCookie("token", token, 3600*24, "/", "", false, true)
 }
 
 func JWTAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tokenString := c.GetHeader("Authorization")
-
-		if tokenString == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing token"})
+		tokenString, err := c.Cookie("token")
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
 			c.Abort()
 			return
 		}
-
-		tokenParts := strings.Split(tokenString, " ")
-		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token format"})
-			c.Abort()
-			return
-		}
-
-		tokenString = tokenParts[1]
 
 		claims := &Claims{}
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 			return jwtKey, nil
 		})
 
-		if err != nil || !token.Valid {
+		if err != nil {
+			if err == jwt.ErrSignatureInvalid {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid signature"})
+			} else {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Token parse error"})
+			}
+			c.Abort()
+			return
+		}
+
+		if !token.Valid {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
 		}
 
 		c.Set("userID", claims.UserID)
+		c.Set("username", claims.Username)
+
 		c.Next()
 	}
 }
