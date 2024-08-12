@@ -33,7 +33,12 @@ func GetTaskByIDHandler(c *gin.Context) {
 func CreateTaskHandler(c *gin.Context) {
 	var newTask models.Task
 	if err := c.ShouldBindJSON(&newTask); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload."})
+		return
+	}
+
+	if newTask.Title == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Make sure to include 'title' field."})
 		return
 	}
 
