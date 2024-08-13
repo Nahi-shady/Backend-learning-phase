@@ -2,13 +2,14 @@ package middlewares
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 )
 
-var jwtKey = []byte("secret_key")
+var jwtSecret = []byte("secret_key")
 
 type Claims struct {
 	Username string `json:"username"`
@@ -29,37 +30,37 @@ func GenerateJWT(username, userID string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(jwtKey)
+	tokenString, err := token.SignedString(jwtSecret)
 	if err != nil {
 		return "", err
 	}
 	return tokenString, nil
 }
 
-func SetTokenCookie(c *gin.Context, token string) {
-	c.SetCookie("token", token, 3600*24, "/", "", false, true)
-}
-
 func JWTAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tokenString, err := c.Cookie("token")
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
 			c.Abort()
 			return
 		}
 
-		claims := &Claims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return jwtKey, nil
-		})
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header format must be Bearer <token>"})
+			c.Abort()
+			return
+		}
 
+		tokenStr := parts[1]
+
+		claims := &Claims{}
+		token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+			return jwtSecret, nil
+		})
 		if err != nil {
-			if err == jwt.ErrSignatureInvalid {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid signature"})
-			} else {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Token parse error"})
-			}
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
 		}
@@ -71,8 +72,25 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 		}
 
 		c.Set("userID", claims.UserID)
-		c.Set("username", claims.Username)
-
 		c.Next()
 	}
+}
+
+func ParseJWT(tokenStr string) (*Claims, error) {
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.NewValidationError("unexpected signing method", jwt.ValidationErrorSignatureInvalid)
+		}
+		return jwtSecret, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if !token.Valid {
+		return nil, jwt.ErrSignatureInvalid
+	}
+
+	return claims, nil
 }

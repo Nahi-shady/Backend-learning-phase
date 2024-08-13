@@ -32,9 +32,7 @@ func LoginUser(c *gin.Context) {
 		return
 	}
 
-	middlewares.SetTokenCookie(c, token)
-
-	c.JSON(http.StatusOK, gin.H{"message": "Login successful"})
+	c.JSON(http.StatusOK, gin.H{"message": "Login successful", "token": token})
 }
 
 func RegisterUser(c *gin.Context) {

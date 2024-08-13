@@ -13,13 +13,37 @@ The Task Management API is a RESTful service built using the Go programming lang
 
 ## Table of Contents
 
+- [Project Structure](#project-structure)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Running the Application](#running-the-application)
 - [API Documentation](#api-documentation)
   - [User Registration](#user-registration)
   - [User Login](#user-login)
-- [Project Structure](#project-structure)
+
+## Project Structure
+
+Here's an overview of the project's directory structure:
+
+``` text
+task_manager/
+|-- controllers/
+|   |-- authController.go
+|   |-- taskController.go
+|-- models/
+|   |-- user.go
+|   |-- task.go
+|-- routes/
+|   |-- authRoutes.go
+|   |-- taskRoutes.go
+|-- utils/
+|   |-- jwt.go
+|   |-- validator.go
+|-- .env
+|-- main.go
+|-- go.mod
+|-- README.md
+```
 
 ## Installation
 
@@ -110,26 +134,108 @@ Errors:
 }
 ```
 
-## Project Structure
+## User Login
 
-Here's an overview of the project's directory structure:
+-Endpoint: /login
+-Method: POST
+-Description: login a user.
+Request:
 
-``` text
-task_manager/
-|-- controllers/
-|   |-- authController.go
-|   |-- taskController.go
-|-- models/
-|   |-- user.go
-|   |-- task.go
-|-- routes/
-|   |-- authRoutes.go
-|   |-- taskRoutes.go
-|-- utils/
-|   |-- jwt.go
-|   |-- validator.go
-|-- .env
-|-- main.go
-|-- go.mod
-|-- README.md
+- Content-Type: `application/json`
+
+``` bash
+{
+  "username": "string (3-20 characters, required)",
+  "password": "string (6+ characters, required)"
+}
 ```
+
+Response:
+Status Code: `200 Ok`
+
+``` bash
+{
+  "message": "User logged in successfully"
+}
+```
+
+Errors:
+
+- Status Code: `401 Unauthorized`
+- Status Code: `400 Bad Request`
+
+## Task Endpoints
+
+### 1. Get All Tasks
+
+- **Endpoint:** `/tasks`
+- **Method:** `GET`
+- **Description:** Retrieves a list of all tasks.
+- **Responses:**
+  - `200 OK` - Successfully retrieved the list of tasks.
+  - `500 Internal Server Error` - If there was an error retrieving tasks.
+
+### 2. Get Task by ID
+
+- **Endpoint:** `/tasks/{id}`
+- **Method:** `GET`
+- **Description:** Retrieves a task by its ID.
+- **Path Parameters:**
+  - `id` - The unique identifier of the task.
+- **Responses:**
+  - `200 OK` - Successfully retrieved the task.
+  - `404 Not Found` - Task with the specified ID was not found.
+  - `500 Internal Server Error` - If there was an error retrieving the task.
+
+### 3. Create Task
+
+- **Endpoint:** `/tasks`
+- **Method:** `POST`
+- **Description:** Creates a new task.
+- **Request Body:**
+  
+```json
+  {
+    "title": "string",
+    "description": "string",
+    "completed": "boolean"
+  }
+```
+
+- **Responses:**
+  - `201 Created` - Successfully created the task.
+  - `400 Bad Request` - If the request body is missing required fields or is invalid.
+  - `500 Internal Server Error` - If there was an error creating the task.
+
+### 4. Update Task
+
+- **Endpoint:** `/tasks`
+- **Method:** `PUT`
+- **Description:** Update a task.
+- **Request Body:**
+  
+```json
+  {
+    "title": "string",
+    "description": "string",
+    "completed": "boolean"
+  }
+```
+
+- **Responses:**
+  - `200 OK`- Successfully updated the task.
+  - `400 Bad Request` - If the request body is missing required fields or is invalid.
+  - `404 Not Found` - Task with the specified ID was not found.
+  - `500 Internal Server Error` - If there was an error updating the task.
+
+- ### 5. Delete Task
+
+- Endpoint: /tasks/{id}
+- Method: DELETE
+- Description: Deletes a task by its ID.
+- Path Parameters:
+  - id - The unique identifier of the task.
+Responses:
+  - `200 OK` - Successfully deleted the task.
+  - `404 Not Found` - Task with the specified ID was not found.
+  - `500 Internal Server Error` - If there was an error deleting the task.
