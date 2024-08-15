@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"log"
+	"task-manager/config"
 	"task-manager/internal/application/services"
 	"task-manager/internal/delivery/controllers"
-	"task-manager/internal/delivery/routers"
+	"task-manager/internal/delivery/routes"
 	"task-manager/internal/domain/repositories"
 	"task-manager/internal/infrastructure/auth"
 
@@ -14,23 +15,28 @@ import (
 )
 
 func main() {
-	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017")
-	client, err := mongo.Connect(context.TODO(), clientOptions)
+	cfg := config.LoadConfig()
+
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(cfg.DBUri))
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer client.Disconnect(context.TODO())
+
 	db := client.Database("task_manager_db")
 
-	jwtService := auth.NewJWTService("your-secret-key")
+	jwtService := auth.NewJWTService(cfg.JWTSecret)
+
 	userRepo := repositories.NewMongoUserRepository(db)
 	taskRepo := repositories.NewMongoTaskRepository(db)
 
-	userService := services.NewUserService(userRepo, jwtService)
-	taskService := services.NewTaskService(taskRepo)
+	userService := *services.NewUserService(userRepo, jwtService)
+	taskService := *services.NewTaskService(taskRepo)
 
 	userController := controllers.NewUserController(userService)
 	taskController := controllers.NewTaskController(taskService)
-	router := routers.SetupRouter(userController, taskController, jwtService)
 
-	router.Run(":8080")
+	r := routes.SetupRouter(userController, taskController, jwtService)
+
+	r.Run(":" + cfg.ServerPort)
 }

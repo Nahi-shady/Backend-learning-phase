@@ -1,0 +1,507 @@
+HERE'S the folder structure task-manager/
+├── Delivery/
+│   ├── main.go
+│   ├── controllers/
+│   │   └── task_controller.go
+│   |    └── user_controller.go
+│   └── routers/
+│       └── router.go
+├── Domain/
+
+│   └── user.go
+├── Infrastructure/
+│   ├── auth_middleWare.go
+│   ├── jwt_service.go
+│   └── password_service.go
+├── Repositories/
+│   ├── task_repository.go
+│   └── user_repository.go
+└── Usecases/
+    ├── task_usecases.go
+    └── user_usecases.go. 
+
+-> main.go
+package main
+
+import (
+	"context"
+	"log"
+
+	"task-manager/delivery/controllers"
+	"task-manager/delivery/routers"
+	infrastructures "task-manager/infrastructures"
+	"task-manager/repositories"
+	"task-manager/usecases"
+
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+)
+
+func main() {
+	// MongoDB connection
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI("mongodb://localhost:27017"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	db := client.Database("task_manager_db")
+
+	// Infrastructures services
+	jwtService := infrastructures.NewJWTService("your-secret-key")
+
+	// Repositories
+	userRepo := repositories.NewMongoUserRepository(db)
+	taskRepo := repositories.NewMongoTaskRepository(db)
+
+	// Usecases
+	userUsecase := usecases.NewUserUsecase(userRepo, &jwtService)
+	taskUsecase := usecases.NewTaskUsecase(taskRepo)
+
+	// Controllers
+	userController := controllers.NewUserController(userUsecase)
+	taskController := controllers.NewTaskController(taskUsecase)
+
+	r := routers.SetupRouter(userController, taskController, jwtService)
+
+	r.Run(":8080")
+}
+
+___________________________________________________________________________
+-> router.go
+package routers
+
+import (
+	"task-manager/delivery/controllers"
+	infrastructures "task-manager/infrastructures"
+
+	"github.com/gin-gonic/gin"
+)
+
+func SetupRouter(userController *controllers.UserController, taskController *controllers.TaskController, jwtService infrastructures.JWTService) *gin.Engine {
+	r := gin.Default()
+
+	authMiddleware := infrastructures.AuthMiddleware(jwtService)
+
+	r.POST("/register", userController.Register)
+	r.POST("/login", userController.Login)
+
+	taskRoutes := r.Group("/tasks")
+	taskRoutes.Use(authMiddleware)
+	{
+		taskRoutes.POST("/", taskController.CreateTask)
+		taskRoutes.GET("/", taskController.GetTasks)
+		taskRoutes.PUT("/:id", taskController.UpdateTask)
+		taskRoutes.DELETE("/:id", taskController.DeleteTask)
+	}
+
+	return r
+}
+
+________________________________________________________________________________
+-> task_controller.go
+package controllers
+
+import (
+	"net/http"
+
+	"task-manager/usecases"
+
+	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
+
+type TaskController struct {
+	taskUsecase *usecases.TaskUsecase
+}
+
+func NewTaskController(taskUsecase *usecases.TaskUsecase) *TaskController {
+	return &TaskController{
+		taskUsecase: taskUsecase,
+	}
+}
+
+func (c *TaskController) CreateTask(ctx *gin.Context) {
+	var req struct {
+		Title string `json:"title"`
+	}
+	if err := ctx.BindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	userID, _ := ctx.Get("userID")
+	if userIDStr, ok := userID.(string); ok {
+		id, _ := primitive.ObjectIDFromHex(userIDStr)
+		if err := c.taskUsecase.CreateTask(req.Title, id); err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		ctx.JSON(http.StatusOK, gin.H{"message": "Task created"})
+	} else {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+	}
+}
+
+func (c *TaskController) GetTasks(ctx *gin.Context) {
+	userID, _ := ctx.Get("userID")
+	if userIDStr, ok := userID.(string); ok {
+		id, _ := primitive.ObjectIDFromHex(userIDStr)
+		tasks, err := c.taskUsecase.GetTasks(id)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		ctx.JSON(http.StatusOK, gin.H{"tasks": tasks})
+	} else {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+	}
+}
+
+func (c *TaskController) UpdateTask(ctx *gin.Context) {
+	var req struct {
+		Title     string `json:"title"`
+		Completed bool   `json:"completed"`
+	}
+	if err := ctx.BindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	taskID, err := primitive.ObjectIDFromHex(ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
+
+	if err := c.taskUsecase.UpdateTask(taskID, req.Title, req.Completed); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "Task updated"})
+}
+
+func (c *TaskController) DeleteTask(ctx *gin.Context) {
+	taskID, err := primitive.ObjectIDFromHex(ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
+
+	if err := c.taskUsecase.DeleteTask(taskID); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "Task deleted"})
+}
+
+________________________________________________________________________________
+-> user_controller.go
+package controllers
+
+import (
+	"net/http"
+
+	"task-manager/usecases"
+
+	"github.com/gin-gonic/gin"
+)
+
+type UserController struct {
+	userUsecase *usecases.UserUsecase
+}
+
+func NewUserController(userUsecase *usecases.UserUsecase) *UserController {
+	return &UserController{
+		userUsecase: userUsecase,
+	}
+}
+
+func (c *UserController) Register(ctx *gin.Context) {
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := ctx.BindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+	if err := c.userUsecase.Register(req.Username, req.Password); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "User registered successfully"})
+}
+
+func (c *UserController) Login(ctx *gin.Context) {
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := ctx.BindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+	token, err := c.userUsecase.LoginUser(req.Username, req.Password)
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"token": token})
+}
+
+________________________________________________________________________________
+-> task_usecase.go
+package usecases
+
+import (
+	"task-manager/domain"
+	"task-manager/repositories"
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
+
+type TaskUsecase struct {
+	taskRepo repositories.TaskRepository
+}
+
+func NewTaskUsecase(taskRepo repositories.TaskRepository) *TaskUsecase {
+	return &TaskUsecase{
+		taskRepo: taskRepo,
+	}
+}
+
+func (t *TaskUsecase) CreateTask(title string, userID primitive.ObjectID) error {
+	task := &domain.Task{
+		Title:     title,
+		Completed: false,
+		UserID:    userID,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	return t.taskRepo.CreateTask(task)
+}
+
+func (t *TaskUsecase) GetTasks(userID primitive.ObjectID) ([]domain.Task, error) {
+	return t.taskRepo.GetTasksByUserID(userID)
+}
+
+func (t *TaskUsecase) UpdateTask(taskID primitive.ObjectID, title string, completed bool) error {
+	return t.taskRepo.UpdateTask(taskID, title, completed)
+}
+
+func (t *TaskUsecase) DeleteTask(taskID primitive.ObjectID) error {
+	return t.taskRepo.DeleteTask(taskID)
+}
+
+________________________________________________________________________________
+-> user_usecase.go
+package usecases
+
+import (
+	"task-manager/domain"
+	"task-manager/repositories"
+
+	"golang.org/x/crypto/bcrypt"
+)
+
+type JWTService interface {
+	GenerateToken(userID string) (string, error)
+	ParseToken(tokenString string) (string, error)
+}
+
+type UserUsecase struct {
+	userRepo repositories.UserRepository
+	jwtSvc   JWTService
+}
+
+func NewUserUsecase(userRepo repositories.UserRepository, jwtSvc JWTService) *UserUsecase {
+	return &UserUsecase{
+		userRepo: userRepo,
+		jwtSvc:   jwtSvc,
+	}
+}
+
+func (u *UserUsecase) Register(username, password string) error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	user := &domain.User{
+		Username: username,
+		Password: string(hashedPassword),
+	}
+	return u.userRepo.CreateUser(user)
+}
+
+func (u *UserUsecase) LoginUser(username, password string) (string, error) {
+	user, err := u.userRepo.GetUserByUsername(username)
+	if err != nil {
+		return "", err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		return "", err
+	}
+
+	token, err := u.jwtSvc.GenerateToken(user.ID.Hex())
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+________________________________________________________________________________
+-> task_repository.go
+package repositories
+
+import (
+	"context"
+	"task-manager/domain"
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+)
+
+type TaskRepository interface {
+	CreateTask(task *domain.Task) error
+	GetTasksByUserID(userID primitive.ObjectID) ([]domain.Task, error)
+	UpdateTask(taskID primitive.ObjectID, title string, completed bool) error
+	DeleteTask(taskID primitive.ObjectID) error
+}
+
+type MongoTaskRepository struct {
+	collection *mongo.Collection
+}
+
+func NewMongoTaskRepository(db *mongo.Database) *MongoTaskRepository {
+	return &MongoTaskRepository{
+		collection: db.Collection("tasks"),
+	}
+}
+
+func (r *MongoTaskRepository) CreateTask(task *domain.Task) error {
+	_, err := r.collection.InsertOne(context.TODO(), task)
+	return err
+}
+
+func (r *MongoTaskRepository) GetTasksByUserID(userID primitive.ObjectID) ([]domain.Task, error) {
+	var tasks []domain.Task
+	cursor, err := r.collection.Find(context.TODO(), bson.M{"user_id": userID})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+
+	for cursor.Next(context.TODO()) {
+		var task domain.Task
+		if err = cursor.Decode(&task); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+
+	return tasks, nil
+}
+
+func (r *MongoTaskRepository) UpdateTask(taskID primitive.ObjectID, title string, completed bool) error {
+	_, err := r.collection.UpdateOne(
+		context.TODO(),
+		bson.M{"_id": taskID},
+		bson.M{"$set": bson.M{"title": title, "completed": completed, "updated_at": primitive.NewDateTimeFromTime(time.Now())}},
+	)
+	return err
+}
+
+func (r *MongoTaskRepository) DeleteTask(taskID primitive.ObjectID) error {
+	_, err := r.collection.DeleteOne(context.TODO(), bson.M{"_id": taskID})
+	return err
+}
+
+________________________________________________________________________________
+-> user_repository.go
+package repositories
+
+import (
+	"context"
+	"errors"
+	"task-manager/domain"
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+)
+
+type UserRepository interface {
+	CreateUser(user *domain.User) error
+	GetUserByUsername(username string) (*domain.User, error)
+}
+
+type MongoUserRepository struct {
+	collection *mongo.Collection
+}
+
+func NewMongoUserRepository(db *mongo.Database) *MongoUserRepository {
+	return &MongoUserRepository{
+		collection: db.Collection("users"),
+	}
+}
+
+func (r *MongoUserRepository) CreateUser(user *domain.User) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var existingUser = r.collection.FindOne(ctx, bson.M{"username": user.Username})
+	if existingUser.Err() == nil {
+		return errors.New("username already exists")
+	}
+
+	_, err := r.collection.InsertOne(ctx, user)
+	return err
+}
+
+func (r *MongoUserRepository) GetUserByUsername(username string) (*domain.User, error) {
+	var user domain.User
+	err := r.collection.FindOne(context.TODO(), bson.M{"username": username}).Decode(&user)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+________________________________________________________________________________
+-> task.go
+package domain
+
+import (
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
+
+type Task struct {
+	ID        primitive.ObjectID `bson:"_id,omitempty"`
+	Title     string             `bson:"title"`
+	Completed bool               `bson:"completed"`
+	UserID    primitive.ObjectID `bson:"user_id"`
+	CreatedAt time.Time          `bson:"created_at"`
+	UpdatedAt time.Time          `bson:"updated_at"`
+}
+
+________________________________________________________________________________
+-> user.go
+package domain
+
+import (
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
+
+type User struct {
+	ID       primitive.ObjectID `bson:"_id,omitempty"`
+	Username string             `bson:"username"`
+	Password string             `bson:"password"`
+}
+________________________________________________________________________________

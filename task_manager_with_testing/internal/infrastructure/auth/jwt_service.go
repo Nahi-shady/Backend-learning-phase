@@ -9,7 +9,7 @@ import (
 
 type JWTService interface {
 	GenerateToken(userID string) (string, error)
-	ParseToken(tokenString string) (string, error)
+	ValidateToken(token string) (*jwt.Token, error)
 }
 
 type jwtCustomClaims struct {
@@ -19,17 +19,23 @@ type jwtCustomClaims struct {
 
 type jwtService struct {
 	secretKey string
+	issuer    string
 }
 
 func NewJWTService(secretKey string) JWTService {
-	return &jwtService{secretKey: secretKey}
+	return &jwtService{
+		secretKey: secretKey,
+		issuer:    "task_manager",
+	}
 }
 
 func (s *jwtService) GenerateToken(userID string) (string, error) {
 	claims := &jwtCustomClaims{
-		userID,
-		jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+		UserID: userID,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(time.Hour * 72).Unix(),
+			Issuer:    s.issuer,
+			IssuedAt:  time.Now().Unix(),
 		},
 	}
 
@@ -37,17 +43,15 @@ func (s *jwtService) GenerateToken(userID string) (string, error) {
 	return token.SignedString([]byte(s.secretKey))
 }
 
-func (s *jwtService) ParseToken(tokenString string) (string, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &jwtCustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+func (s *jwtService) ValidateToken(encodedToken string) (*jwt.Token, error) {
+	token, err := jwt.ParseWithClaims(encodedToken, &jwtCustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(s.secretKey), nil
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	claims, ok := token.Claims.(*jwtCustomClaims)
-	if ok && token.Valid {
-		return claims.UserID, nil
+	if _, ok := token.Claims.(*jwtCustomClaims); ok && token.Valid {
+		return token, nil
 	}
-	return "", errors.New("invalid token")
+	return nil, errors.New("invalid token")
 }
